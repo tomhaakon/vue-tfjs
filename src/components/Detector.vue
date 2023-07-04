@@ -22,7 +22,6 @@
       {{ item.label }}
     </option>
   </Selector>
-
 </template>
 
 <script setup lang="ts">
@@ -35,11 +34,11 @@ const Selector = defineAsyncComponent(
   () => import(/*webpackChunkName:selector*/ "../components/Selector.vue")
 );
 
-
 const video = ref<HTMLVideoElement>();
 const devices = ref<MediaDeviceInfo[]>([]);
 const drawingBoard = ref<HTMLCanvasElement>();
 const camera = ref<string>("");
+
 onMounted(async () => {
   if ("mediaDevices" in navigator && "getUserMedia" in navigator.mediaDevices) {
     devices.value = await navigator.mediaDevices.enumerateDevices();
@@ -49,8 +48,7 @@ onMounted(async () => {
   }
 });
 
-
-watch(camera, () => startStreaming())
+watch(camera, () => startStreaming());
 
 function startStreaming(): void {
   navigator.mediaDevices
@@ -61,16 +59,14 @@ function startStreaming(): void {
     })
     .then((stream: MediaStream) => {
       (video.value as HTMLVideoElement).srcObject = stream;
-      setInterval(()=>{
-            detectObjects();
-      }, 1000)
-     
+      setInterval(() => {
+        detectObjects();
+      }, 1000);
     });
 }
 
 async function detectObjects(): Promise<void> {
-
-  console.log("detecting ...")
+  console.log("detecting ...");
 
   const model = await cocoSSD.load();
   const predictions: cocoSSD.DetectedObject[] = await model.detect(
@@ -103,6 +99,5 @@ async function detectObjects(): Promise<void> {
       context.stroke();
     }
   });
-  
 }
 </script>
