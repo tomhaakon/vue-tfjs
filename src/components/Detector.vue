@@ -63,7 +63,7 @@ function startStreaming(): void {
       (video.value as HTMLVideoElement).srcObject = stream;
       setInterval(() => {
         detectObjects();
-      }, 1000);
+      }, 2000);
     });
 }
 
@@ -86,8 +86,8 @@ async function detectObjects(): Promise<void> {
     const [x, y, width, height] = prediction.bbox;
     const label = prediction.class;
 
-    const color = "blue";
-    const strokeWidth = 5;
+    const color = "yellow";
+    const strokeWidth = 1;
     const font = "25px Arial";
     if (context) {
       context.beginPath();
