@@ -1,6 +1,9 @@
 <template>
   <div class="w-full h-auto md:w-[840px] relative">
-    <div>Number of objects: {{ objectCount }}</div>
+    <div v-for="(count, label) in classCounts" :key="label">
+      {{ label }}: {{ count }}
+    </div>
+    <div>Crossing Count: {{ crossingCount }}</div>
     <canvas
       ref="drawingBoard"
       class="absolute w-full h-full bg-transparent top-0 left-0 mx-auto"
@@ -41,6 +44,8 @@ const drawingBoard = ref<HTMLCanvasElement>();
 const camera = ref<string>("");
 let model: cocoSSD.ObjectDetection;
 const objectCount = ref(0);
+const crossingCount = ref(0);
+const lineY = ref(100); // Replace 200 with the position of your line
 
 onMounted(async () => {
   if ("mediaDevices" in navigator && "getUserMedia" in navigator.mediaDevices) {
@@ -105,6 +110,17 @@ async function detectObjects(): Promise<void> {
     const color = "yellow";
     const strokeWidth = 1;
     const font = "16px Arial";
+
+    context.beginPath();
+    context.moveTo(0, lineY.value);
+    context.lineTo(drawingBoard.value.width, lineY.value);
+    context.strokeStyle = "red";
+    context.lineWidth = 5;
+    context.stroke();
+
+    if (y < lineY.value && y + height > lineY.value) {
+      crossingCount.value++;
+    }
 
     if (classCounts.value.has(label)) {
       classCounts.value.set(label, classCounts.value.get(label)! + 1);
