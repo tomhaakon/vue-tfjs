@@ -34,7 +34,7 @@ import "@tensorflow/tfjs-backend-webgl";
 const Selector = defineAsyncComponent(
   () => import("../components/Selector.vue")
 );
-
+const classCounts = ref(new Map<string, number>());
 const video = ref<HTMLVideoElement>();
 const devices = ref<MediaDeviceInfo[]>([]);
 const drawingBoard = ref<HTMLCanvasElement>();
@@ -82,6 +82,8 @@ async function detectObjects(): Promise<void> {
     video.value as HTMLVideoElement
   );
   objectCount.value = predictions.length;
+  classCounts.value = new Map<string, number>();
+
   let context: CanvasRenderingContext2D;
 
   if (drawingBoard.value) {
@@ -100,13 +102,18 @@ async function detectObjects(): Promise<void> {
     const [x, y, width, height] = prediction.bbox;
     const label = prediction.class;
     const predictScore = (prediction.score * 100).toFixed(2);
-
-    console.log("detected:", prediction.class, "with ", predictScore, "%");
-    console.log(prediction.bbox);
-
     const color = "yellow";
     const strokeWidth = 1;
     const font = "16px Arial";
+
+    if (classCounts.value.has(label)) {
+      classCounts.value.set(label, classCounts.value.get(label)! + 1);
+    } else {
+      classCounts.value.set(label, 1);
+    }
+
+    console.log("detected:", prediction.class, "with ", predictScore, "%");
+    console.log(prediction.bbox);
 
     if (context) {
       context.beginPath();
