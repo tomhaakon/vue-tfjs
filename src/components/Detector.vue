@@ -45,7 +45,7 @@ const camera = ref<string>("");
 let model: cocoSSD.ObjectDetection;
 const objectCount = ref(0);
 const crossingCount = ref(0);
-const lineY = ref(100); // Replace 200 with the position of your line
+const lineY = ref(0); // Replace 200 with the position of your line
 
 onMounted(async () => {
   if ("mediaDevices" in navigator && "getUserMedia" in navigator.mediaDevices) {
@@ -112,8 +112,9 @@ async function detectObjects(): Promise<void> {
     const font = "16px Arial";
 
     context.beginPath();
-    context.moveTo(0, lineY.value);
-    context.lineTo(drawingBoard.value.width, lineY.value);
+    context.moveTo(200, 200);
+    context.lineTo(drawingBoard.value.width, drawingBoard.value.height);
+
     context.strokeStyle = "red";
     context.lineWidth = 5;
     context.stroke();
