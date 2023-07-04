@@ -38,12 +38,14 @@ const video = ref<HTMLVideoElement>();
 const devices = ref<MediaDeviceInfo[]>([]);
 const drawingBoard = ref<HTMLCanvasElement>();
 const camera = ref<string>("");
+let model: cocoSSD.ObjectDetection;
 
 onMounted(async () => {
   if ("mediaDevices" in navigator && "getUserMedia" in navigator.mediaDevices) {
     devices.value = await navigator.mediaDevices.enumerateDevices();
     devices.value = devices.value.filter((item) => item.kind == "videoinput");
     camera.value = devices.value[0].deviceId;
+    model = await cocoSSD.load();
     startStreaming();
   }
 });
@@ -68,7 +70,6 @@ function startStreaming(): void {
 async function detectObjects(): Promise<void> {
   console.log("detecting ...");
 
-  const model = await cocoSSD.load();
   const predictions: cocoSSD.DetectedObject[] = await model.detect(
     video.value as HTMLVideoElement
   );
