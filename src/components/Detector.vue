@@ -81,8 +81,14 @@ async function detectObjects(): Promise<void> {
     drawingBoard.value.height = (video.value as HTMLVideoElement).videoHeight;
     drawingBoard.value.width = (video.value as HTMLVideoElement).videoWidth;
   }
-
+  // clear canvas before drawing new boxes
   predictions.forEach((prediction) => {
+    context?.clearRect(
+      0,
+      0,
+      drawingBoard.value.width,
+      drawingBoard.value.height
+    );
     const [x, y, width, height] = prediction.bbox;
     const label = prediction.class;
 
