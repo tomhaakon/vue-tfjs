@@ -25,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { defineAsyncComponent, onMounted, ref, watch } from "vue";
+import { defineAsyncComponent, onMounted, onUnmounted, ref, watch } from "vue";
 import * as cocoSSD from "@tensorflow-models/coco-ssd";
 import "@tensorflow/tfjs-backend-cpu";
 import "@tensorflow/tfjs-backend-webgl";
@@ -49,7 +49,11 @@ onMounted(async () => {
     startStreaming();
   }
 });
-
+onUnmounted(() => {
+  (video.value as HTMLVideoElement).srcObject
+    ?.getTracks()
+    .forEach((track) => track.stop());
+});
 watch(camera, () => startStreaming());
 
 function startStreaming(): void {
@@ -63,13 +67,11 @@ function startStreaming(): void {
       (video.value as HTMLVideoElement).srcObject = stream;
       setInterval(() => {
         detectObjects();
-      }, 2000);
+      }, 1500);
     });
 }
 
 async function detectObjects(): Promise<void> {
-  console.log("detecting ...");
-
   const predictions: cocoSSD.DetectedObject[] = await model.detect(
     video.value as HTMLVideoElement
   );
@@ -106,5 +108,6 @@ async function detectObjects(): Promise<void> {
       context.stroke();
     }
   });
+  console.log("detecting ...");
 }
 </script>
