@@ -1,5 +1,6 @@
 <template>
   <div class="w-full h-auto md:w-[840px] relative">
+    <div>Number of objects: {{ objectCount }}</div>
     <canvas
       ref="drawingBoard"
       class="absolute w-full h-full bg-transparent top-0 left-0 mx-auto"
@@ -31,7 +32,7 @@ import "@tensorflow/tfjs-backend-cpu";
 import "@tensorflow/tfjs-backend-webgl";
 
 const Selector = defineAsyncComponent(
-  () => import(/*webpackChunkName:selector*/ "../components/Selector.vue")
+  () => import("../components/Selector.vue")
 );
 
 const video = ref<HTMLVideoElement>();
@@ -39,6 +40,7 @@ const devices = ref<MediaDeviceInfo[]>([]);
 const drawingBoard = ref<HTMLCanvasElement>();
 const camera = ref<string>("");
 let model: cocoSSD.ObjectDetection;
+const objectCount = ref(0);
 
 onMounted(async () => {
   if ("mediaDevices" in navigator && "getUserMedia" in navigator.mediaDevices) {
@@ -59,8 +61,12 @@ watch(camera, () => startStreaming());
 function startStreaming(): void {
   navigator.mediaDevices
     .getUserMedia({
+      audio: false,
       video: {
         deviceId: camera.value as string,
+        facingMode: "user",
+        width: 600,
+        height: 420,
       },
     })
     .then((stream: MediaStream) => {
@@ -75,7 +81,7 @@ async function detectObjects(): Promise<void> {
   const predictions: cocoSSD.DetectedObject[] = await model.detect(
     video.value as HTMLVideoElement
   );
-
+  objectCount.value = predictions.length;
   let context: CanvasRenderingContext2D;
 
   if (drawingBoard.value) {
@@ -85,29 +91,33 @@ async function detectObjects(): Promise<void> {
   }
   // clear canvas before drawing new boxes
   predictions.forEach((prediction) => {
-    context?.clearRect(
-      0,
-      0,
-      drawingBoard.value.width,
-      drawingBoard.value.height
-    );
+    // context?.clearRect(
+    //   0,
+    //   0,
+    //   drawingBoard.value.width,
+    //   drawingBoard.value.height
+    // );
     const [x, y, width, height] = prediction.bbox;
     const label = prediction.class;
+    const predictScore = (prediction.score * 100).toFixed(2);
+
+    console.log("detected:", prediction.class, "with ", predictScore, "%");
+    console.log(prediction.bbox);
 
     const color = "yellow";
     const strokeWidth = 1;
-    const font = "25px Arial";
+    const font = "16px Arial";
+
     if (context) {
       context.beginPath();
       context.font = font;
       context.strokeStyle = color;
       context.fillStyle = color;
       context.lineWidth = strokeWidth;
-      context.fillText(label, x, y);
+      context.fillText(`${label} ${predictScore}%`, x, y + height + 20); // + 20 to push the text abit down
       context.rect(x, y, width, height);
       context.stroke();
     }
   });
-  console.log("detecting ...");
 }
 </script>
