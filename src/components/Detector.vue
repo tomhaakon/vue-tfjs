@@ -1,9 +1,11 @@
 <template>
+  <button @click="startCamera" class="btn">Start Camera</button>
+  <button @click="stopCamera" class="btn">Stop Camera</button>
+  <div v-for="(count, label) in classCounts" :key="label">
+    {{ label }}: {{ count }}
+  </div>
+  <div>Crossing Count: {{ crossingCount }}</div>
   <div class="w-full h-auto md:w-[840px] relative">
-    <div v-for="(count, label) in classCounts" :key="label">
-      {{ label }}: {{ count }}
-    </div>
-    <div>Crossing Count: {{ crossingCount }}</div>
     <canvas
       ref="drawingBoard"
       class="absolute w-full h-full bg-transparent top-0 left-0 mx-auto"
@@ -11,49 +13,72 @@
     <video
       ref="video"
       class="w-full h-full mx-auto"
-      autoplay
       playsinline
+      autoplay
     ></video>
   </div>
-
-  <Selector v-model="camera">
-    <option value="">Change Camera</option>
-    <option
-      v-for="(item, index) in devices"
-      :key="index"
-      :value="item.deviceId"
-    >
-      {{ item.label }}
-    </option>
-  </Selector>
 </template>
 
 <script setup lang="ts">
-import { defineAsyncComponent, onMounted, onUnmounted, ref, watch } from "vue";
+import { onMounted, onUnmounted, ref, watch } from "vue";
 import * as cocoSSD from "@tensorflow-models/coco-ssd";
 import "@tensorflow/tfjs-backend-cpu";
 import "@tensorflow/tfjs-backend-webgl";
 
-const Selector = defineAsyncComponent(
-  () => import("../components/Selector.vue")
-);
+//refs
 const classCounts = ref(new Map<string, number>());
 const video = ref<HTMLVideoElement>();
 const devices = ref<MediaDeviceInfo[]>([]);
 const drawingBoard = ref<HTMLCanvasElement>();
 const camera = ref<string>("");
-let model: cocoSSD.ObjectDetection;
 const objectCount = ref(0);
 const crossingCount = ref(0);
-const lineY = ref(0); // Replace 200 with the position of your line
-
+const lineX = ref(300); // horizontal placement
+let interval: NodeJS.Timeout | null = null;
+let model: cocoSSD.ObjectDetection;
+let mediaStream: MediaStream | null = null;
+watch(camera, (newValue, oldValue) => {
+  if (oldValue && !newValue) {
+    stopCamera();
+  }
+});
+const startCamera = () => {
+  console.log("start");
+  if (mediaStream) {
+    console.log("Camera already started");
+    return;
+  }
+  startStreaming();
+};
+const stopCamera = () => {
+  console.log("stop");
+  if (mediaStream) {
+    mediaStream.getTracks().forEach((track) => track.stop());
+    mediaStream = null;
+    (video.value as HTMLVideoElement).srcObject = null;
+    const context = drawingBoard.value?.getContext("2d");
+    if (interval) {
+      clearInterval(interval);
+      interval = null;
+    }
+    if (context) {
+      context.clearRect(
+        0,
+        0,
+        drawingBoard.value!.width,
+        drawingBoard.value!.height
+      );
+    }
+  } else {
+    console.log("Camera not started");
+  }
+};
 onMounted(async () => {
   if ("mediaDevices" in navigator && "getUserMedia" in navigator.mediaDevices) {
     devices.value = await navigator.mediaDevices.enumerateDevices();
     devices.value = devices.value.filter((item) => item.kind == "videoinput");
-    camera.value = devices.value[0].deviceId;
+    camera.value = devices.value[0].deviceId || "";
     model = await cocoSSD.load();
-    startStreaming();
   }
 });
 onUnmounted(() => {
@@ -61,9 +86,11 @@ onUnmounted(() => {
     ?.getTracks()
     .forEach((track) => track.stop());
 });
-watch(camera, () => startStreaming());
 
-function startStreaming(): void {
+//watch(camera, () => startStreaming());
+
+const startStreaming = () => {
+  console.log("startStreaming triggered");
   navigator.mediaDevices
     .getUserMedia({
       audio: false,
@@ -75,14 +102,19 @@ function startStreaming(): void {
       },
     })
     .then((stream: MediaStream) => {
+      mediaStream = stream;
       (video.value as HTMLVideoElement).srcObject = stream;
-      setInterval(() => {
+
+      interval = setInterval(() => {
         detectObjects();
       }, 1500);
+    })
+    .catch((error) => {
+      console.error("Error starting the camera: ", error);
     });
-}
+};
 
-async function detectObjects(): Promise<void> {
+const detectObjects = async () => {
   const predictions: cocoSSD.DetectedObject[] = await model.detect(
     video.value as HTMLVideoElement
   );
@@ -112,14 +144,14 @@ async function detectObjects(): Promise<void> {
     const font = "16px Arial";
 
     context.beginPath();
-    context.moveTo(200, 200);
-    context.lineTo(drawingBoard.value.width, drawingBoard.value.height);
+    context.moveTo(lineX.value, 0);
+    context.lineTo(lineX.value - 100, drawingBoard.value.height);
 
     context.strokeStyle = "red";
     context.lineWidth = 5;
     context.stroke();
 
-    if (y < lineY.value && y + height > lineY.value) {
+    if (x < lineX.value && x + width > lineX.value) {
       crossingCount.value++;
     }
 
@@ -129,9 +161,9 @@ async function detectObjects(): Promise<void> {
       classCounts.value.set(label, 1);
     }
 
-    console.log("detected:", prediction.class, "with ", predictScore, "%");
-    console.log(prediction.bbox);
+    console.log(predictScore, "%:  ", prediction.class);
 
+    // detection box
     if (context) {
       context.beginPath();
       context.font = font;
@@ -143,5 +175,5 @@ async function detectObjects(): Promise<void> {
       context.stroke();
     }
   });
-}
+};
 </script>
