@@ -1,8 +1,11 @@
 <template>
   <button @click="startCamera" class="btn">Start Camera</button>
   <button @click="stopCamera" class="btn">Stop Camera</button>
-  <button @click="showCrossCount" class="btn active:bg-red-600">
-    Show cross line
+  <button
+    @click="showCrossCount"
+    :class="showLine ? ' bg-red-600 active btn' : 'btn'"
+  >
+    Activate crossingline
   </button>
   <div class="w-full h-auto md:w-[840px] relative">
     <canvas
@@ -29,6 +32,7 @@ import "@tensorflow/tfjs-backend-cpu";
 import "@tensorflow/tfjs-backend-webgl";
 
 //refs
+const isActive = ref(false);
 const showLine = ref(false);
 const classCounts = ref(new Map<string, number>());
 const video = ref<HTMLVideoElement>();
@@ -44,8 +48,13 @@ let model: cocoSSD.ObjectDetection;
 let mediaStream: MediaStream | null = null;
 
 const showCrossCount = () => {
-  showLine.value = !showLine.value;
-  console.log("showLine:", showLine.value);
+  if (mediaStream) {
+    isActive.value = true;
+    showLine.value = !showLine.value;
+    console.log("showLine:", showLine.value);
+  } else {
+    console.log("camera not started");
+  }
 };
 
 ///
@@ -85,6 +94,7 @@ const startCamera = () => {
 const stopCamera = () => {
   console.log("stop");
   if (mediaStream) {
+    showLine.value = false;
     mediaStream.getTracks().forEach((track) => track.stop());
     mediaStream = null;
     (video.value as HTMLVideoElement).srcObject = null;
