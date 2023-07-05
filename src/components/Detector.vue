@@ -4,8 +4,10 @@
   <button
     @click="showCrossCount"
     :class="showLine ? ' bg-red-600 active btn' : 'btn'"
+    class=""
   >
-    Activate crossingline
+    <p v-if="!showLine">Activate crossingline</p>
+    <p v-else>Deactivate crossingline</p>
   </button>
   <div class="w-full h-auto md:w-[840px] relative">
     <canvas
@@ -160,12 +162,6 @@ const detectObjects = async () => {
   }
   // clear canvas before drawing new boxes
   predictions.forEach((prediction) => {
-    // context?.clearRect(
-    //   0,
-    //   0,
-    //   drawingBoard.value.width,
-    //   drawingBoard.value.height
-    // );
     const [x, y, width, height] = prediction.bbox;
     const label = prediction.class;
     const predictScore = (prediction.score * 100).toFixed(2);
