@@ -1,15 +1,29 @@
 <template>
-  <button @click="startCamera" class="btn">Start Camera</button>
-  <button @click="stopCamera" class="btn">Stop Camera</button>
-  <button
-    @click="showCrossCount"
-    :class="showLine ? ' bg-red-600 active btn' : 'btn'"
-    class=""
-  >
-    <p v-if="!showLine">Activate crossingline</p>
-    <p v-else>Deactivate crossingline</p>
-  </button>
-  <div class="w-full h-auto md:w-[840px] relative">
+  <div class="flex gap-2 pb-2">
+    <div v-if="isStreaming">
+      <button
+        @click="stopCamera"
+        class="bg-orange-600 active btn hover:bg-orange-500 text-black"
+      >
+        Stop Camera
+      </button>
+    </div>
+    <div v-else>
+      <button @click="startCamera" class="btn">Start Camera</button>
+    </div>
+    <div v-if="isStreaming">
+      <button
+        @click="showCrossCount"
+        :class="showLine ? ' bg-red-600 active btn' : 'btn'"
+        class="hover:bg-red-500"
+      >
+        <p v-if="!showLine">Activate crossingline</p>
+        <p v-else>Deactivate crossingline</p>
+      </button>
+    </div>
+  </div>
+
+  <div class="w-full h-auto md:w-[840px] relative bg-slate-300">
     <canvas
       ref="drawingBoard"
       class="absolute w-full h-full bg-transparent top-0 left-0 mx-auto"
@@ -21,7 +35,7 @@
       autoplay
     ></video>
   </div>
-  <div>Crossing Count: {{ crossingCount }}</div>
+  <div>Crossing Line Count: {{ crossingCount }}</div>
   <div v-for="(count, label) in classCounts" :key="label">
     {{ label }}: {{ count }}
   </div>
@@ -34,7 +48,7 @@ import "@tensorflow/tfjs-backend-cpu";
 import "@tensorflow/tfjs-backend-webgl";
 
 //refs
-const isActive = ref(false);
+const isStreaming = ref(false);
 const showLine = ref(false);
 const classCounts = ref(new Map<string, number>());
 const video = ref<HTMLVideoElement>();
@@ -51,7 +65,6 @@ let mediaStream: MediaStream | null = null;
 
 const showCrossCount = () => {
   if (mediaStream) {
-    isActive.value = true;
     showLine.value = !showLine.value;
     console.log("showLine:", showLine.value);
   } else {
@@ -86,6 +99,7 @@ watch(camera, (newValue, oldValue) => {
 //start camera
 const startCamera = () => {
   console.log("start");
+  isStreaming.value = true;
   if (mediaStream) {
     console.log("Camera already started");
     return;
@@ -95,10 +109,12 @@ const startCamera = () => {
 //stop camera
 const stopCamera = () => {
   console.log("stop");
+  isStreaming.value = false;
   if (mediaStream) {
     showLine.value = false;
     mediaStream.getTracks().forEach((track) => track.stop());
     mediaStream = null;
+    console.log(mediaStream);
     (video.value as HTMLVideoElement).srcObject = null;
     const context = drawingBoard.value?.getContext("2d");
     //stop detecting interval
