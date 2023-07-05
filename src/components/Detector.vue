@@ -1,10 +1,9 @@
 <template>
   <button @click="startCamera" class="btn">Start Camera</button>
   <button @click="stopCamera" class="btn">Stop Camera</button>
-  <div v-for="(count, label) in classCounts" :key="label">
-    {{ label }}: {{ count }}
-  </div>
-  <div>Crossing Count: {{ crossingCount }}</div>
+  <button @click="showCrossCount" class="btn active:bg-red-600">
+    Show cross line
+  </button>
   <div class="w-full h-auto md:w-[840px] relative">
     <canvas
       ref="drawingBoard"
@@ -17,6 +16,10 @@
       autoplay
     ></video>
   </div>
+  <div>Crossing Count: {{ crossingCount }}</div>
+  <div v-for="(count, label) in classCounts" :key="label">
+    {{ label }}: {{ count }}
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -26,6 +29,7 @@ import "@tensorflow/tfjs-backend-cpu";
 import "@tensorflow/tfjs-backend-webgl";
 
 //refs
+const showLine = ref(false);
 const classCounts = ref(new Map<string, number>());
 const video = ref<HTMLVideoElement>();
 const devices = ref<MediaDeviceInfo[]>([]);
@@ -34,14 +38,41 @@ const camera = ref<string>("");
 const objectCount = ref(0);
 const crossingCount = ref(0);
 const lineX = ref(300); // horizontal placement
+
 let interval: NodeJS.Timeout | null = null;
 let model: cocoSSD.ObjectDetection;
 let mediaStream: MediaStream | null = null;
+
+const showCrossCount = () => {
+  showLine.value = !showLine.value;
+  console.log("showLine:", showLine.value);
+};
+
+///
+onMounted(async () => {
+  if ("mediaDevices" in navigator && "getUserMedia" in navigator.mediaDevices) {
+    devices.value = await navigator.mediaDevices.enumerateDevices();
+    devices.value = devices.value.filter((item) => item.kind == "videoinput");
+    camera.value = devices.value[0].deviceId || "";
+    model = await cocoSSD.load();
+  }
+});
+
+//lifecycle
+onUnmounted(() => {
+  clearInterval(interval);
+  interval = null;
+
+  (video.value as HTMLVideoElement).srcObject
+    ?.getTracks()
+    .forEach((track) => track.stop());
+});
 watch(camera, (newValue, oldValue) => {
   if (oldValue && !newValue) {
     stopCamera();
   }
 });
+//start camera
 const startCamera = () => {
   console.log("start");
   if (mediaStream) {
@@ -50,6 +81,7 @@ const startCamera = () => {
   }
   startStreaming();
 };
+//stop camera
 const stopCamera = () => {
   console.log("stop");
   if (mediaStream) {
@@ -57,6 +89,7 @@ const stopCamera = () => {
     mediaStream = null;
     (video.value as HTMLVideoElement).srcObject = null;
     const context = drawingBoard.value?.getContext("2d");
+    //stop detecting interval
     if (interval) {
       clearInterval(interval);
       interval = null;
@@ -73,22 +106,8 @@ const stopCamera = () => {
     console.log("Camera not started");
   }
 };
-onMounted(async () => {
-  if ("mediaDevices" in navigator && "getUserMedia" in navigator.mediaDevices) {
-    devices.value = await navigator.mediaDevices.enumerateDevices();
-    devices.value = devices.value.filter((item) => item.kind == "videoinput");
-    camera.value = devices.value[0].deviceId || "";
-    model = await cocoSSD.load();
-  }
-});
-onUnmounted(() => {
-  (video.value as HTMLVideoElement).srcObject
-    ?.getTracks()
-    .forEach((track) => track.stop());
-});
 
-//watch(camera, () => startStreaming());
-
+// start stream function
 const startStreaming = () => {
   console.log("startStreaming triggered");
   navigator.mediaDevices
@@ -115,6 +134,7 @@ const startStreaming = () => {
 };
 
 const detectObjects = async () => {
+  console.log("start detecting");
   const predictions: cocoSSD.DetectedObject[] = await model.detect(
     video.value as HTMLVideoElement
   );
@@ -143,16 +163,17 @@ const detectObjects = async () => {
     const strokeWidth = 1;
     const font = "16px Arial";
 
-    context.beginPath();
-    context.moveTo(lineX.value, 0);
-    context.lineTo(lineX.value - 100, drawingBoard.value.height);
-
-    context.strokeStyle = "red";
-    context.lineWidth = 5;
-    context.stroke();
-
-    if (x < lineX.value && x + width > lineX.value) {
-      crossingCount.value++;
+    if (showLine.value) {
+      context.beginPath();
+      context.moveTo(lineX.value, 0);
+      context.lineTo(lineX.value, drawingBoard.value.height);
+      context.strokeStyle = "red";
+      context.lineWidth = 5;
+      context.stroke();
+      //counter for red line crossing
+      if (x < lineX.value && x + width > lineX.value) {
+        crossingCount.value++;
+      }
     }
 
     if (classCounts.value.has(label)) {

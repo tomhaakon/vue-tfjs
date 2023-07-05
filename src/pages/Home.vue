@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="flex justify-between items-center">
-      <Title>Camera detection 3.0 TERMINATOR v6</Title>
+      <Title>Camera detection 3.0 TERMINATOR v6, nei V8</Title>
     </div>
 
     <div class="mt-6 w-full">
