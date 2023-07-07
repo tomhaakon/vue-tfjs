@@ -135,7 +135,7 @@ const detectObjects = async () => {
       const predictScore = Math.floor(prediction.score * 100);
 
       // detection box
-      if (context) {
+      if (context && predictScore > 50) {
         context.clearRect(
           0,
           0,
@@ -181,6 +181,7 @@ const detectObjects = async () => {
           if (closestTrackedObject) {
             closestTrackedObject.centroid = centroID;
             closestTrackedObject.lastSeen = Date.now();
+            console.log("same car");
           }
         } else {
           // Create a new tracked object
@@ -198,10 +199,9 @@ const detectObjects = async () => {
               time: Date.now(),
             },
           });
-          console.log("Car registered");
+          console.log("mew car registered", centroID);
         }
-        //   const maxAge = 1000 * 60 * 5; // 5 minutes in milliseconds
-        const maxAge = 2000;
+        const maxAge = 500 //* 60 * 5; // 5 minutes in milliseconds
 
         trackedObjects = trackedObjects.filter(
           (obj) => Date.now() - obj.lastSeen <= maxAge
