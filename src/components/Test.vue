@@ -25,9 +25,7 @@
       <source src="../assets/car_passing.mp4" type="video/mp4" />
     </video>
   </div>
-  <div>
-    <pre>{{ objectCounter }}</pre>
-  </div>
+  <div><p v-for="obj in showCount">x</p></div>
 </template>
 
 <script setup lang="ts">
@@ -40,6 +38,7 @@ import "@tensorflow/tfjs-backend-webgl";
 const video = ref<HTMLVideoElement>();
 const isPlaying = ref(false);
 const drawingBoard = ref<HTMLCanvasElement | null>();
+const showCount = ref();
 
 // type script array
 interface TrackedObject {
@@ -181,7 +180,7 @@ const detectObjects = async () => {
           if (closestTrackedObject) {
             closestTrackedObject.centroid = centroID;
             closestTrackedObject.lastSeen = Date.now();
-            console.log("same car");
+            console.log("new car");
           }
         } else {
           // Create a new tracked object
@@ -192,6 +191,8 @@ const detectObjects = async () => {
             label: label,
           });
           //  counted: { label: string; number: number; when: number };
+
+          console.log("mew car registered");
           objectCounter.push({
             detected: {
               label: label,
@@ -199,9 +200,8 @@ const detectObjects = async () => {
               time: Date.now(),
             },
           });
-          console.log("mew car registered", centroID);
         }
-        const maxAge = 500 //* 60 * 5; // 5 minutes in milliseconds
+        const maxAge = 1000; //* 60 * 5; // 5 minutes in milliseconds
 
         trackedObjects = trackedObjects.filter(
           (obj) => Date.now() - obj.lastSeen <= maxAge
@@ -209,5 +209,7 @@ const detectObjects = async () => {
       } // end of context && preiction.score
     }); // end of prediction for each
   } // end of detect objects function
+  showCount.value = objectCounter;
+  console.log(showCount.value);
 };
 </script>
