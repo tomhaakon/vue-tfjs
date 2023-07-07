@@ -28,14 +28,22 @@
       ref="drawingBoard"
       class="absolute w-full h-full bg-transparent top-0 left-0 mx-auto"
     ></canvas>
-    <video
-      ref="video"
-      class="w-full h-full mx-auto"
-      playsinline
-      autoplay
-    ></video>
+    <div>
+      <video
+        ref="video"
+        class="w-full h-full mx-auto"
+        playsinline
+        autoplay
+      ></video>
+    </div>
   </div>
   <div>Crossing Line Count: {{ crossingCount }}</div>
+  stored {{ objectStore.length }}
+  <pre>
+
+ {{ showMeNumbers }}
+ </pre
+  >
   <div v-for="(count, label) in classCounts" :key="label">
     {{ label }}: {{ count }}
   </div>
@@ -58,10 +66,25 @@ const camera = ref<string>("");
 const objectCount = ref(0);
 const crossingCount = ref(0);
 const lineX = ref(300); // horizontal placement
+const lineY = ref(230); // horizontal placement
 
+const showMeNumbers = ref();
+
+let objectID = ref();
+const objectStore = ref([]);
+const uniqueStore = ref([]);
+const movementStore = ref([]);
 let interval: NodeJS.Timeout | null = null;
 let model: cocoSSD.ObjectDetection;
 let mediaStream: MediaStream | null = null;
+
+const average = (numbers) => {
+  let total = numbers.reduce(
+    (accumulator, current) => accumulator + current,
+    0
+  );
+  return total / numbers.length;
+};
 
 const showCrossCount = () => {
   if (mediaStream) {
@@ -154,7 +177,7 @@ const startStreaming = () => {
 
       interval = setInterval(() => {
         detectObjects();
-      }, 1500);
+      }, 100);
     })
     .catch((error) => {
       console.error("Error starting the camera: ", error);
@@ -162,7 +185,7 @@ const startStreaming = () => {
 };
 
 const detectObjects = async () => {
-  console.log("start detecting");
+  //  console.log("start detecting");
   const predictions: cocoSSD.DetectedObject[] = await model.detect(
     video.value as HTMLVideoElement
   );
@@ -186,14 +209,27 @@ const detectObjects = async () => {
     const font = "16px Arial";
 
     if (showLine.value) {
+      // redline
       context.beginPath();
       context.moveTo(lineX.value, 0);
       context.lineTo(lineX.value, drawingBoard.value.height);
       context.strokeStyle = "red";
       context.lineWidth = 5;
       context.stroke();
-      //counter for red line crossing
-      if (x < lineX.value && x + width > lineX.value) {
+      //horizontal line
+      context.beginPath();
+      context.moveTo(0, lineY.value);
+      context.lineTo(drawingBoard.value?.width, lineY.value);
+      context.strokeStyle = "green";
+      context.lineWidth = 5;
+      context.stroke();
+      //counter
+      if (
+        x < lineX.value &&
+        x + width > lineX.value &&
+        y < lineY.value &&
+        y + height > lineY.value
+      ) {
         crossingCount.value++;
       }
     }
@@ -203,8 +239,8 @@ const detectObjects = async () => {
     } else {
       classCounts.value.set(label, 1);
     }
-
-    console.log(predictScore, "%:  ", prediction.class);
+    //
+    // console.log(predictScore, "%:  ", prediction.class);
 
     // detection box
     if (context) {
@@ -216,6 +252,59 @@ const detectObjects = async () => {
       context.fillText(`${label} ${predictScore}%`, x, y + height + 20); // + 20 to push the text abit down
       context.rect(x, y, width, height);
       context.stroke();
+      // make unique detections
+      const xMovement = Number(prediction.bbox[0].toFixed(2));
+      const objectSize =
+        (prediction.bbox[2] * prediction.bbox[3]) / prediction.bbox[1];
+      objectID.value = objectSize.toFixed(0);
+
+      showMeNumbers.value = prediction.bbox[1];
+      const isTheSame = () => {
+        // Find the object in the store, if it exists
+        const existingObject = objectStore.value.find(
+          (obj) => obj.id === objectID.value
+        );
+
+        if (!existingObject) {
+          // If the object does not exist in the store, add it
+          const currentObjectId = objectID.value;
+          objectStore.value.push({
+            id: currentObjectId,
+            label: label,
+            timerId: setTimeout(() => {
+              // Remove the object after 2 seconds
+              objectStore.value = objectStore.value.filter(
+                (obj) => obj.id !== currentObjectId
+              );
+              //  console.log("Removed object", currentObjectId);
+            }, 2000),
+          });
+          console.log("new object", currentObjectId);
+        } else {
+          // If the object already exists in the store, cancel the previous timer and set a new one
+          clearTimeout(existingObject.timerId);
+          existingObject.timerId = setTimeout(() => {
+            // Remove the object after 2 seconds
+            objectStore.value = objectStore.value.filter(
+              (obj) => obj.id !== existingObject.id
+            );
+            //   console.log("Removed object", existingObject.id);
+          }, 1000);
+          //  console.log("Refreshed timer for object", existingObject.id);
+        }
+      };
+
+      //   console.log(uniqueStore.value.length);
+      // Call the function
+      isTheSame();
+      //console.log(objectStore.value);
+      //console.log(uniqueStore.value);
+      //  console.log(uniqueDetection.value.toFixed(0));
+      // let currentTime = new Date();
+      // let hours = currentTime.getHours();
+      // let minutes = currentTime.getMinutes();
+      // let seconds = currentTime.getSeconds();
+      // console.log(`${hours}:${minutes}:${seconds}`);
     }
   });
 };
