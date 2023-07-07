@@ -94,11 +94,13 @@ onUnmounted(() => {
   }
 
   if (video.value) {
-    video.value.srcObject?.getTracks().forEach((track) => track.stop());
+    const mediaStream = video.value.srcObject as MediaStream;
+    mediaStream?.getTracks().forEach((track) => track.stop());
   }
 });
 if (video.value) {
-  video.value.srcObject?.getTracks().forEach((track) => track.stop());
+  const mediaStream = video.value.srcObject as MediaStream;
+  mediaStream?.getTracks().forEach((track) => track.stop());
 }
 
 // start stream function
@@ -135,12 +137,15 @@ const detectObjects = async () => {
 
       // detection box
       if (context && predictScore > 50) {
-        context.clearRect(
-          0,
-          0,
-          drawingBoard.value.width,
-          drawingBoard.value.height
-        );
+        if (drawingBoard.value) {
+          context.clearRect(
+            0,
+            0,
+            drawingBoard.value.width,
+            drawingBoard.value.height
+          );
+        }
+
         context.beginPath();
         context.font = "72px Arial";
         context.fillStyle = "rgba(255, 0, 0, 0.6)";
