@@ -1,11 +1,16 @@
 <template>
   <div class="flex gap-2 pb-2">
     <div class="flex gap-2 pb-2">
-      <div v-if="!isPlaying">
-        <button @click="startVideo" class="btn">Start</button>
+      <div v-if="isLoading">
+        <button class="btn disabled bg-red-600">LOADING MODEL</button>
       </div>
       <div v-else>
-        <button @click="stopVideo" class="btn">Stop</button>
+        <div v-if="!isPlaying">
+          <button @click="startVideo" class="btn">Start</button>
+        </div>
+        <div v-else>
+          <button @click="stopVideo" class="btn btn-secondary">Stop</button>
+        </div>
       </div>
     </div>
   </div>
@@ -24,6 +29,10 @@
       <source src="../assets/car_passing.mp4" type="video/mp4" />
     </video>
   </div>
+  <div v-if="!isLoading">
+    <p class=" ">Model Loaded: {{ modelLoaded }}</p>
+  </div>
+
   <div class="text-3xl">
     <pre>Total Count: {{ totalCount }}</pre>
   </div>
@@ -40,6 +49,9 @@ const video = ref<HTMLVideoElement>();
 const isPlaying = ref(false);
 const drawingBoard = ref<HTMLCanvasElement | null>();
 const totalCount = ref(0);
+const isLoading = ref(false);
+const modelLoaded = ref();
+
 let frameCounter = 0;
 let previousFrameObjects: { label: string; bbox: number[] }[] = [];
 
@@ -48,9 +60,7 @@ let model: cocoSSD.ObjectDetection;
 let animationFrameId: number | null = null;
 
 // Constants
-const predictionSetting = 65;
-const threshold = 30;
-const resetAge = 5 * 60 * 5;
+const predictionSetting = 73;
 
 // Function to handle video end event
 const handleVideoEnded = () => {
@@ -82,7 +92,16 @@ const stopVideo = () => {
 
 // Lifecycle hook when component is mounted
 onMounted(async () => {
-  model = await cocoSSD.load();
+  //const cocoModel = "mobilenet_v1"; // This is the original MobileNet model architecture, which is deeper and provides higher accuracy but may be slower in inference compared to the "lite" versions.
+  const cocoModel = "mobilenet_v2"; // This is an improved version of the MobileNet architecture, known for its efficiency and speed while maintaining good accuracy.
+  //const cocoModel = "lite_mobilenet_v2"; // This is a lighter version of the MobileNet v2 model, optimized for lower resource consumption and faster inference. It provides a good balance between accuracy and speed.
+  //const cocoModel = "lite_mobilenet_v3_small"; // This is a small and lightweight version of the MobileNet v3 model, designed for efficient inference on devices with limited resources.
+  //const cocoModel = "lite_mobilenet_v3_large" // This is a larger version of the MobileNet v3 model, which offers higher accuracy but may be slower compared to the small version.;
+  isLoading.value = true;
+  model = await cocoSSD.load({ base: cocoModel });
+  isLoading.value = false;
+  modelLoaded.value = cocoModel;
+  console.log("loaded");
 });
 
 // Lifecycle hook when component is unmounted
@@ -145,7 +164,7 @@ const detectObjects = async () => {
     frameCounter = count;
     previousFrameObjects = frameObjects;
 
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 200));
   }
 };
 

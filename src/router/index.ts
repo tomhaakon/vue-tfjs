@@ -1,16 +1,17 @@
 import { createRouter, createWebHistory } from "vue-router";
-import Test from "../components/Test.vue";
+import VideoCount from "../components/VideoCount.vue";
+import WebcamCount from "../components/WebcamCount.vue";
 
 const routes = [
   {
     path: "/",
-    name: "Home",
-    component: () => import("../pages/Home.vue"),
+    name: "VideoCount",
+    component: VideoCount,
   },
   {
-    path: "/test",
-    name: "Test",
-    component: Test,
+    path: "/webcamcount",
+    name: "WebcamCount",
+    component: WebcamCount,
   },
 ];
 
