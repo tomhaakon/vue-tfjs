@@ -19,60 +19,78 @@
       class="w-full h-full mx-auto"
       playsinline
       muted
-      loop
       playbackRate="1"
     >
       <source src="../assets/car_passing.mp4" type="video/mp4" />
     </video>
   </div>
-  <div><p v-for="obj in showCount">x</p></div>
+  <div class="text-3xl">
+    <p v-for="counter in objectCounter" :key="counter.detected.label">
+      {{ counter.detected.label }}: {{ counter.detected.number }}
+    </p>
+    <pre>Total Count: {{ totalCount }}</pre>
+  </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { onMounted, onUnmounted, ref } from "vue";
 import * as cocoSSD from "@tensorflow-models/coco-ssd";
 import "@tensorflow/tfjs-backend-cpu";
 import "@tensorflow/tfjs-backend-webgl";
 
-//refs
+// Refs
 const video = ref<HTMLVideoElement>();
 const isPlaying = ref(false);
 const drawingBoard = ref<HTMLCanvasElement | null>();
+const objectCounter = ref<ObjectCounter[]>([]);
 const showCount = ref();
 
-// type script array
+// TypeScript types
 interface TrackedObject {
   id: number;
   centroid: { x: number; y: number };
   lastSeen: number;
   label: string;
+  counted: boolean;
 }
+
 interface ObjectCounter {
-  detected: { label: string; number: number; time: number };
+  detected: {
+    label: string;
+    number: number;
+    time: number;
+  };
 }
-//
+
+// Other variables
 let trackedObjects: TrackedObject[] = [];
-let objectCounter: ObjectCounter[] = [];
-let number = 1;
 let trackedIndex = 0;
 let animationFrameId: number | null = null;
 let model: cocoSSD.ObjectDetection;
-///
-// settings
+let totalCount = ref(0);
+// Constants
+const predictionSetting = 70;
+const threshold = 30;
+const resetAge = 5 * 60 * 5;
 
-const predictionSetting = 1000;
-const threshold = 500; // Define your threshold here
+// Function to handle video end event
+const handleVideoEnded = () => {
+  stopVideo();
+  console.log("Video has ended");
+};
 
+// Function to start playing the video and tracking objects
 const startVideo = () => {
-  console.log("startVideo triggered");
   isPlaying.value = true;
   if (video.value) {
     video.value.play();
     startStreaming();
+    video.value.addEventListener("ended", handleVideoEnded);
   }
 };
+
+// Function to stop playing the video and tracking objects
 const stopVideo = () => {
-  console.log("stopVideo triggered");
   isPlaying.value = false;
   if (video.value) {
     video.value.pause();
@@ -82,69 +100,66 @@ const stopVideo = () => {
     animationFrameId = null;
   }
 };
-///
+
+// Lifecycle hook when component is mounted
 onMounted(async () => {
   model = await cocoSSD.load();
 });
-//lifecycle
+
+// Lifecycle hook when component is unmounted
 onUnmounted(() => {
   if (animationFrameId !== null) {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
   }
-
   if (video.value) {
     const mediaStream = video.value.srcObject as MediaStream;
     mediaStream?.getTracks().forEach((track) => track.stop());
   }
 });
-if (video.value) {
-  const mediaStream = video.value.srcObject as MediaStream;
-  mediaStream?.getTracks().forEach((track) => track.stop());
-}
 
-// start stream function
+// Function to start the object tracking and counting
 const startStreaming = () => {
-  console.log("startStreaming triggered");
   const detect = async () => {
     await detectObjects();
     if (isPlaying.value) {
-      // ensure we're still playing
       animationFrameId = requestAnimationFrame(detect);
     }
   };
   detect();
 };
 
+// Function to handle object detection and tracking logic
 const detectObjects = async () => {
   let context: CanvasRenderingContext2D;
   const predictions: cocoSSD.DetectedObject[] = await model.detect(
     video.value as HTMLVideoElement
   );
+  // Reset the total count for each frame
+  totalCount.value = 0;
 
   if (drawingBoard.value) {
     context = drawingBoard.value.getContext("2d") as CanvasRenderingContext2D;
     drawingBoard.value.height = (video.value as HTMLVideoElement).videoHeight;
     drawingBoard.value.width = (video.value as HTMLVideoElement).videoWidth;
 
-    // for eeach detected object
-    predictions.forEach((prediction) => {
-      // yellow detection box
-      const [x, y, width, height] = prediction.bbox;
+    // Reset the counters for each object in the current frame
+    for (let i = 0; i < trackedObjects.length; i++) {
+      trackedObjects[i].counted = false;
+    }
 
+    for (const prediction of predictions) {
+      const [x, y, width, height] = prediction.bbox;
       const label = prediction.class;
       const predictScore = Math.floor(prediction.score * 100);
 
-      // detection box
-      if (context && predictScore > 50) {
-        if (drawingBoard.value) {
-          context.clearRect(
-            0,
-            0,
-            drawingBoard.value.width,
-            drawingBoard.value.height
-          );
-        }
+      if (context && predictScore > predictionSetting) {
+        context.clearRect(
+          0,
+          0,
+          drawingBoard.value.width,
+          drawingBoard.value.height
+        );
 
         context.beginPath();
         context.font = "72px Arial";
@@ -152,25 +167,25 @@ const detectObjects = async () => {
         context.lineWidth = 1;
         context.fillRect(x, y, width, height);
         context.fillStyle = "yellow";
-        context.fillText(`${predictScore}%`, x, y + height + 20); // + 20 to push the text abit down
+        context.fillText(`${predictScore}%`, x, y + height + 20);
 
         const bBoxX = Number(prediction.bbox[0]);
         const bBoxY = Number(prediction.bbox[1]);
         const bBoxWidth = prediction.bbox[2];
         const bBoxHeight = prediction.bbox[3];
 
-        const centroID = {
+        const centroid = {
           x: bBoxX + bBoxWidth / 2,
           y: bBoxY + bBoxHeight / 2,
         };
-        let minDistance = Number.MAX_VALUE;
-        let closestTrackedObject = null;
 
-        // Calculate the distance to all tracked objects
+        let minDistance = Number.MAX_VALUE;
+        let closestTrackedObject: TrackedObject | null = null;
+
         for (let i = 0; i < trackedObjects.length; i++) {
           const distance = Math.hypot(
-            trackedObjects[i].centroid.x - centroID.x,
-            trackedObjects[i].centroid.y - centroID.y
+            trackedObjects[i].centroid.x - centroid.x,
+            trackedObjects[i].centroid.y - centroid.y
           );
 
           if (distance < minDistance) {
@@ -179,42 +194,58 @@ const detectObjects = async () => {
           }
         }
 
-        // Check if a tracked object is close enough to be associated with the new detection
         if (minDistance < threshold) {
-          // Update the tracked object's centroid and last seen timestamp
           if (closestTrackedObject) {
-            closestTrackedObject.centroid = centroID;
+            closestTrackedObject.centroid = centroid;
             closestTrackedObject.lastSeen = Date.now();
-            console.log("new car");
           }
         } else {
-          // Create a new tracked object
           trackedObjects.push({
             id: trackedIndex++,
-            centroid: centroID,
+            centroid: centroid,
             lastSeen: Date.now(),
             label: label,
-          });
-          //  counted: { label: string; number: number; when: number };
-
-          console.log("mew car registered");
-          objectCounter.push({
-            detected: {
-              label: label,
-              number: number++,
-              time: Date.now(),
-            },
+            counted: false,
           });
         }
-        const maxAge = 1000; //* 60 * 5; // 5 minutes in milliseconds
 
-        trackedObjects = trackedObjects.filter(
-          (obj) => Date.now() - obj.lastSeen <= maxAge
-        );
-      } // end of context && preiction.score
-    }); // end of prediction for each
-  } // end of detect objects function
-  showCount.value = objectCounter;
-  console.log(showCount.value);
+        if (closestTrackedObject && !closestTrackedObject.counted) {
+          const existingCounterIndex = objectCounter.value.findIndex(
+            (counter) => counter.detected.label === label
+          );
+
+          if (existingCounterIndex !== -1) {
+            // Update the existing counter
+            objectCounter.value[existingCounterIndex].detected.number++;
+            totalCount.value++; // Increment the totalCount
+          } else {
+            objectCounter.value.push({
+              detected: {
+                label,
+                number: 1,
+                time: Date.now(),
+              },
+            });
+            totalCount.value++; // Increment the totalCount
+          }
+
+          closestTrackedObject.counted = true;
+        }
+      }
+    }
+
+    const maxAge = resetAge;
+
+    trackedObjects = trackedObjects.filter(
+      (obj) => Date.now() - obj.lastSeen <= maxAge
+    );
+
+    // Remove counted objects from the trackedObjects array
+    trackedObjects = trackedObjects.filter((obj) => !obj.counted);
+
+    showCount.value = objectCounter.value.length;
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
 };
 </script>

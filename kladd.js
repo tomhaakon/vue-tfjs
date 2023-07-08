@@ -18,6 +18,25 @@
 // const milliseconds = timeLocation.getMilliseconds(); // Add this line
 // Check if the distance is greater than the threshold
 
+// [Context] + [Specific Information] + [Intent/Goal] + [Response Format (if needed)] = Perfect Prompt
 
+//console.log(objectStore.value);
+//console.log(uniqueStore.value);
+//  console.log(uniqueDetection.value.toFixed(0));
+// let currentTime = new Date();
+// let hours = currentTime.getHours();
+// let minutes = currentTime.getMinutes();
+// let seconds = currentTime.getSeconds();
+// console.log(`${hours}:${minutes}:${seconds}`);
 
+// setTimeout(() => {
 
+//   // Store in objectCounter
+//   objectCounter.push({
+//     detected: {
+//       label: label,
+//       number: number++,
+//       time: Date.now(),
+//     },
+//   });
+// }, pushTimer);

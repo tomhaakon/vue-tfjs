@@ -37,6 +37,7 @@
       ></video>
     </div>
   </div>
+  <div v-if="errorMessage" class="text-error">{{ errorMessage }}</div>
   <div>Crossing Line Count: {{ crossingCount }}</div>
   stored {{ objectStore.length }}
   <pre>
@@ -62,7 +63,9 @@ const classCounts = ref(new Map<string, number>());
 const video = ref<HTMLVideoElement>();
 const devices = ref<MediaDeviceInfo[]>([]);
 const drawingBoard = ref<HTMLCanvasElement>();
-const camera = ref<string>("");
+const camera = ref<string | null>(null);
+const errorMessage = ref(""); // Error message to be displayed
+
 const objectCount = ref(0);
 const crossingCount = ref(0);
 const lineX = ref(300); // horizontal placement
@@ -70,21 +73,14 @@ const lineY = ref(230); // horizontal placement
 
 const showMeNumbers = ref();
 
-let objectID = ref();
-const objectStore = ref([]);
+let objectID = ref<string>();
+const objectStore = ref<{ id: string; label: string; timerId: number }[]>([]);
+
 const uniqueStore = ref([]);
 const movementStore = ref([]);
-let interval: NodeJS.Timeout | null = null;
+const mediaStream = ref<MediaStream | null>(null);
 let model: cocoSSD.ObjectDetection;
-let mediaStream: MediaStream | null = null;
-
-const average = (numbers) => {
-  let total = numbers.reduce(
-    (accumulator, current) => accumulator + current,
-    0
-  );
-  return total / numbers.length;
-};
+let interval: number | null = null;
 
 const showCrossCount = () => {
   if (mediaStream) {
@@ -100,19 +96,18 @@ onMounted(async () => {
   if ("mediaDevices" in navigator && "getUserMedia" in navigator.mediaDevices) {
     devices.value = await navigator.mediaDevices.enumerateDevices();
     devices.value = devices.value.filter((item) => item.kind == "videoinput");
-    camera.value = devices.value[0].deviceId || "";
+    camera.value = devices.value[0]?.deviceId || null;
     model = await cocoSSD.load();
   }
 });
 
 //lifecycle
 onUnmounted(() => {
-  clearInterval(interval);
-  interval = null;
-
-  (video.value as HTMLVideoElement).srcObject
-    ?.getTracks()
-    .forEach((track) => track.stop());
+  if (mediaStream.value) {
+    const tracks = (mediaStream.value as any).getTracks(); // Type assertion
+    tracks.forEach((track: any) => track.stop());
+    mediaStream.value = null;
+  }
 });
 watch(camera, (newValue, oldValue) => {
   if (oldValue && !newValue) {
@@ -122,6 +117,10 @@ watch(camera, (newValue, oldValue) => {
 //start camera
 const startCamera = () => {
   console.log("start");
+  if (devices.value.length === 0) {
+    errorMessage.value = "No video input devices found.";
+    return;
+  }
   isStreaming.value = true;
   if (mediaStream) {
     console.log("Camera already started");
@@ -133,12 +132,10 @@ const startCamera = () => {
 const stopCamera = () => {
   console.log("stop");
   isStreaming.value = false;
-  if (mediaStream) {
-    showLine.value = false;
-    mediaStream.getTracks().forEach((track) => track.stop());
-    mediaStream = null;
-    console.log(mediaStream);
-    (video.value as HTMLVideoElement).srcObject = null;
+  if (mediaStream.value) {
+    const tracks = (mediaStream.value as any).getTracks(); // Type assertion
+    tracks.forEach((track: any) => track.stop());
+    mediaStream.value = null;
     const context = drawingBoard.value?.getContext("2d");
     //stop detecting interval
     if (interval) {
@@ -172,8 +169,7 @@ const startStreaming = () => {
       },
     })
     .then((stream: MediaStream) => {
-      mediaStream = stream;
-      (video.value as HTMLVideoElement).srcObject = stream;
+      mediaStream.value = stream;
 
       interval = setInterval(() => {
         detectObjects();
@@ -208,32 +204,6 @@ const detectObjects = async () => {
     const strokeWidth = 1;
     const font = "16px Arial";
 
-    if (showLine.value) {
-      // redline
-      context.beginPath();
-      context.moveTo(lineX.value, 0);
-      context.lineTo(lineX.value, drawingBoard.value.height);
-      context.strokeStyle = "red";
-      context.lineWidth = 5;
-      context.stroke();
-      //horizontal line
-      context.beginPath();
-      context.moveTo(0, lineY.value);
-      context.lineTo(drawingBoard.value?.width, lineY.value);
-      context.strokeStyle = "green";
-      context.lineWidth = 5;
-      context.stroke();
-      //counter
-      if (
-        x < lineX.value &&
-        x + width > lineX.value &&
-        y < lineY.value &&
-        y + height > lineY.value
-      ) {
-        crossingCount.value++;
-      }
-    }
-
     if (classCounts.value.has(label)) {
       classCounts.value.set(label, classCounts.value.get(label)! + 1);
     } else {
@@ -267,7 +237,7 @@ const detectObjects = async () => {
 
         if (!existingObject) {
           // If the object does not exist in the store, add it
-          const currentObjectId = objectID.value;
+          const currentObjectId = objectID.value || ""; // Use an empty string as default
           objectStore.value.push({
             id: currentObjectId,
             label: label,
@@ -297,14 +267,6 @@ const detectObjects = async () => {
       //   console.log(uniqueStore.value.length);
       // Call the function
       isTheSame();
-      //console.log(objectStore.value);
-      //console.log(uniqueStore.value);
-      //  console.log(uniqueDetection.value.toFixed(0));
-      // let currentTime = new Date();
-      // let hours = currentTime.getHours();
-      // let minutes = currentTime.getMinutes();
-      // let seconds = currentTime.getSeconds();
-      // console.log(`${hours}:${minutes}:${seconds}`);
     }
   });
 };

@@ -8,9 +8,6 @@
 <script setup lang="ts">
 import { defineAsyncComponent } from "@vue/runtime-core";
 
-const Title = defineAsyncComponent(
-  () => import(/*webpackChunkName:"title"*/ "../components/Title.vue")
-);
 const Detector = defineAsyncComponent(
   () => import(/*webpackChunkName:"detector"*/ "../components/Detector.vue")
 );
