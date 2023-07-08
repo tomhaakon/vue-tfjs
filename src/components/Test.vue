@@ -25,9 +25,6 @@
     </video>
   </div>
   <div class="text-3xl">
-    <p v-for="counter in objectCounter" :key="counter.detected.label">
-      {{ counter.detected.label }}: {{ counter.detected.number }}
-    </p>
     <pre>Total Count: {{ totalCount }}</pre>
   </div>
 </template>
@@ -42,34 +39,16 @@ import "@tensorflow/tfjs-backend-webgl";
 const video = ref<HTMLVideoElement>();
 const isPlaying = ref(false);
 const drawingBoard = ref<HTMLCanvasElement | null>();
-const objectCounter = ref<ObjectCounter[]>([]);
-const showCount = ref();
-
-// TypeScript types
-interface TrackedObject {
-  id: number;
-  centroid: { x: number; y: number };
-  lastSeen: number;
-  label: string;
-  counted: boolean;
-}
-
-interface ObjectCounter {
-  detected: {
-    label: string;
-    number: number;
-    time: number;
-  };
-}
+const totalCount = ref(0);
+let frameCounter = 0;
+let previousFrameObjects: { label: string; bbox: number[] }[] = [];
 
 // Other variables
-let trackedObjects: TrackedObject[] = [];
-let trackedIndex = 0;
-let animationFrameId: number | null = null;
 let model: cocoSSD.ObjectDetection;
-let totalCount = ref(0);
+let animationFrameId: number | null = null;
+
 // Constants
-const predictionSetting = 70;
+const predictionSetting = 65;
 const threshold = 30;
 const resetAge = 5 * 60 * 5;
 
@@ -129,123 +108,81 @@ const startStreaming = () => {
   detect();
 };
 
-// Function to handle object detection and tracking logic
+// Function to handle object detection and counting logic
 const detectObjects = async () => {
   let context: CanvasRenderingContext2D;
   const predictions: cocoSSD.DetectedObject[] = await model.detect(
     video.value as HTMLVideoElement
   );
-  // Reset the total count for each frame
-  totalCount.value = 0;
 
   if (drawingBoard.value) {
     context = drawingBoard.value.getContext("2d") as CanvasRenderingContext2D;
     drawingBoard.value.height = (video.value as HTMLVideoElement).videoHeight;
     drawingBoard.value.width = (video.value as HTMLVideoElement).videoWidth;
 
-    // Reset the counters for each object in the current frame
-    for (let i = 0; i < trackedObjects.length; i++) {
-      trackedObjects[i].counted = false;
-    }
+    let count = 0;
+
+    const frameObjects: { label: string; bbox: number[] }[] = [];
 
     for (const prediction of predictions) {
       const [x, y, width, height] = prediction.bbox;
-      const label = prediction.class;
+      const label: string = prediction.class;
       const predictScore = Math.floor(prediction.score * 100);
 
       if (context && predictScore > predictionSetting) {
-        context.clearRect(
-          0,
-          0,
-          drawingBoard.value.width,
-          drawingBoard.value.height
-        );
+        // Draw bounding box and other visualizations
 
-        context.beginPath();
-        context.font = "72px Arial";
-        context.fillStyle = "rgba(255, 0, 0, 0.6)";
-        context.lineWidth = 1;
-        context.fillRect(x, y, width, height);
-        context.fillStyle = "yellow";
-        context.fillText(`${predictScore}%`, x, y + height + 20);
-
-        const bBoxX = Number(prediction.bbox[0]);
-        const bBoxY = Number(prediction.bbox[1]);
-        const bBoxWidth = prediction.bbox[2];
-        const bBoxHeight = prediction.bbox[3];
-
-        const centroid = {
-          x: bBoxX + bBoxWidth / 2,
-          y: bBoxY + bBoxHeight / 2,
-        };
-
-        let minDistance = Number.MAX_VALUE;
-        let closestTrackedObject: TrackedObject | null = null;
-
-        for (let i = 0; i < trackedObjects.length; i++) {
-          const distance = Math.hypot(
-            trackedObjects[i].centroid.x - centroid.x,
-            trackedObjects[i].centroid.y - centroid.y
-          );
-
-          if (distance < minDistance) {
-            minDistance = distance;
-            closestTrackedObject = trackedObjects[i];
-          }
-        }
-
-        if (minDistance < threshold) {
-          if (closestTrackedObject) {
-            closestTrackedObject.centroid = centroid;
-            closestTrackedObject.lastSeen = Date.now();
-          }
-        } else {
-          trackedObjects.push({
-            id: trackedIndex++,
-            centroid: centroid,
-            lastSeen: Date.now(),
-            label: label,
-            counted: false,
-          });
-        }
-
-        if (closestTrackedObject && !closestTrackedObject.counted) {
-          const existingCounterIndex = objectCounter.value.findIndex(
-            (counter) => counter.detected.label === label
-          );
-
-          if (existingCounterIndex !== -1) {
-            // Update the existing counter
-            objectCounter.value[existingCounterIndex].detected.number++;
-            totalCount.value++; // Increment the totalCount
-          } else {
-            objectCounter.value.push({
-              detected: {
-                label,
-                number: 1,
-                time: Date.now(),
-              },
-            });
-            totalCount.value++; // Increment the totalCount
-          }
-
-          closestTrackedObject.counted = true;
-        }
+        frameObjects.push({ label, bbox: [x, y, width, height] });
       }
     }
 
-    const maxAge = resetAge;
+    count = countOverlappingObjects(frameObjects, previousFrameObjects);
 
-    trackedObjects = trackedObjects.filter(
-      (obj) => Date.now() - obj.lastSeen <= maxAge
-    );
+    if (count > 0 && frameCounter === 0) {
+      totalCount.value += count;
+    }
 
-    // Remove counted objects from the trackedObjects array
-    trackedObjects = trackedObjects.filter((obj) => !obj.counted);
-
-    showCount.value = objectCounter.value.length;
+    frameCounter = count;
+    previousFrameObjects = frameObjects;
 
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
+};
+
+// Function to count overlapping objects between current and previous frames
+const countOverlappingObjects = (
+  currentObjects: { label: string; bbox: number[] }[],
+  previousObjects: { label: string; bbox: number[] }[]
+): number => {
+  let count = 0;
+  for (const currentObject of currentObjects) {
+    for (const previousObject of previousObjects) {
+      if (bboxOverlap(currentObject.bbox, previousObject.bbox)) {
+        count++;
+        break;
+      }
+    }
+  }
+  return count;
+};
+
+// Function to check if two bounding boxes overlap
+const bboxOverlap = (bbox1: number[], bbox2: number[]): boolean => {
+  const x1 = bbox1[0];
+  const y1 = bbox1[1];
+  const w1 = bbox1[2];
+  const h1 = bbox1[3];
+
+  const x2 = bbox2[0];
+  const y2 = bbox2[1];
+  const w2 = bbox2[2];
+  const h2 = bbox2[3];
+
+  const left = Math.max(x1, x2);
+  const right = Math.min(x1 + w1, x2 + w2);
+  const top = Math.max(y1, y2);
+  const bottom = Math.min(y1 + h1, y2 + h2);
+
+  return left < right && top < bottom;
 };
 </script>
